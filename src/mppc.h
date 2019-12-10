@@ -118,14 +118,24 @@ public :
 mppc::mppc(TString file1, TString file2)
 {
 	TString finner, fouter;
+
+	if(gSystem->AccessPathName(file1)) {
+		cout << file1 << " not found!" << endl;
+		throw std::exception();
+	}
+        if(gSystem->AccessPathName(file2)) {
+                cout << file2 << " not found!" << endl;
+                throw std::exception();
+        }
+
         if( (file1.Contains("inner")&&file2.Contains("inner")) ||
              (file1.Contains("outer")&&file2.Contains("outer")) ||
              (!file1.Contains("outer")&&!file1.Contains("inner")) ||
              (!file2.Contains("outer")&&!file2.Contains("inner")) ) {
 		
-		cout << "FATAL ERROR: expected one 'inner' and one 'outer'" 
-                   << " file while both were the same or one type was missing...aborting" << endl;
-		abort();
+		cout << "expected one 'inner' and one 'outer'" <<
+                   " file while both were the same or one type was missing...aborting" << endl;
+		throw std::exception();
 	}
 
 	if(file1.Contains("inner")) {
@@ -148,100 +158,10 @@ mppc::mppc(TString file1, TString file2)
                 foutstr=foutstr.substr(foutstr.find("/")+1,foutstr.size());
         foutstr=foutstr.substr(0,foutstr.find(".root"));
 
-	/*TSystemDirectory dir(DATA,DATA);
-	TList *files = dir.GetListOfFiles();
-	TSystemFile *file;
-	TString fname; 
-	TIter nxt(files);
-
-	TString prefix = FILEBASE + to_string(n) + "_South_" + to_string(s);
-	TString pathHod=DATA, pathSelf=DATA;
-	size_t ctrHod=0, ctrSelf=0;
-	int base = 1e5;
-
-	while ((file=(TSystemFile*)nxt())) { 
-		fname = file->GetName(); 
-		if (!file->IsDirectory() && fname.EndsWith(".root")&&fname.BeginsWith(prefix)) { 
-			if(fname.Contains("HOD_trig")) {
-				ctrHod++;
-				cout << "found hod trig file: " << fname.Data() << endl; 
-				pathHod+=fname;
-			}
-			if(fname.Contains("Self_trig")) {
-				ctrSelf++;
-				cout << "found self trig file: " << fname.Data() << endl; 
-				pathSelf+=fname;
-			}	
-				
-		}
-	}
-
-	//if user didn't shorten ORM ID from SN00#-00### to #00###
-	if(ctrHod==0 && ctrSelf==0 && (n%base<n||s%base<s)) {
-		nxt.Reset();
-		prefix = FILEBASE;
-		if(n%base<n){
-			prefix+="SN00"+to_string(n/base)+"-00";
-			if(n%base<100&&n%base>9)
-				prefix+="0"+to_string(n%base);
-			if(n%base<10)
-				prefix+="00"+to_string(n%base);
-		}
-		else
-			prefix+=to_string(n);
-		prefix+="_South_";
-		if(s%base<s){
-			prefix+="SN00"+to_string(s/base)+"-00";
-			if(s%base<100&&s%base>9)
-				 prefix+="0"+to_string(s%base);
-			if(s%base<10)
-                                prefix+="00"+to_string(s%base);
-		}
-		else
-			prefix+=to_string(s);
-
-		pathHod=DATA; pathSelf=DATA;
-
-		while ((file=(TSystemFile*)nxt())) { 
-			fname = file->GetName();
-			if (!file->IsDirectory() && fname.EndsWith(".root")&&fname.BeginsWith(prefix)) { 
-				if(fname.Contains("HOD_trig")) {
-					ctrHod++;
-					cout << "found hod trig file: " << fname.Data() << endl; 
-					pathHod+=fname;
-				}
-				if(fname.Contains("Self_trig")) {
-					ctrSelf++;
-					cout << "found self trig file: " << fname.Data() << endl; 
-					pathSelf+=fname;
-				}
-			}
-		}
-	}
-
-	if(ctrHod==0) cout << "WARNING: HOD TRIG RUN NOT FOUND using prefix " << prefix << " !" << endl;
-	if(ctrSelf==0) cout << "WARNING: SELF TRIG RUN NOT FOUND using prefix " << prefix << " !" << endl;
-	if(ctrHod>1) cout << "WARNING: MULTIPLE HOD TRIG RUNS FOUND!" << endl;
-	if(ctrSelf>1) cout << "WARNING: MULTIPLE SELF TRIG RUNS FOUND!" << endl;
-
-	TFile *fhod=0, *fself=0;
-	if(ctrHod>0)  fhod = (TFile*)gROOT->GetListOfFiles()->FindObject(pathHod);
-	if(ctrSelf>0) fself = (TFile*)gROOT->GetListOfFiles()->FindObject(pathSelf);
-
-	if (!fhod || !fhod->IsOpen())
-	{
- 		if(ctrHod>0) fhod = new TFile(pathHod);
-	}
-	if (!fself || !fself->IsOpen())
-	{
-		if(ctrSelf>0) fself = new TFile(pathSelf);
-	}
-
-*/
 	TTree* treeInner = 0;
 	TTree* treeOuter = 0;
-	/*if(ctrHod>0)*/  treeInner = (TTree*)fin->FindObjectAny("events");//,treeInner);
-	/*if(ctrSelf>0)*/ treeOuter = (TTree*)fout->FindObjectAny("events");//,treeOuter);
+	treeInner = (TTree*)fin->FindObjectAny("events");
+	treeOuter = (TTree*)fout->FindObjectAny("events");
 
 	Init(treeInner,'i');
 	Init(treeOuter,'o');
@@ -255,53 +175,48 @@ mppc::mppc(TString file1, TString file2)
 	TString calDir = CAL + dirName;
 	TString anaDir = ANA + dirName;
 
-	if(1/*ctrHod>0&&ctrSelf>0i*/) {
-		cout << "generating output directories with base " << dirName << "..." << endl;
+	cout << "generating output directories with base " << dirName << "..." << endl;
 
-		//check to see if plot directory exists, if not then create
-		if (stat(string(plotDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
-			com = "mkdir "+(string)plotDir; std::system(com.c_str());
-			cout << "   created directory '" << plotDir << "'" << endl;
-		}
-		else
-			cout << "   plot directory already exists...skipping to next" << endl;
-
-		//check to see if cal plot directory exists, if not then create
-		if (stat(string(calPlotDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
-			com = "mkdir "+(string)calPlotDir; std::system(com.c_str());
-			cout << "   created directory '" << calPlotDir << "'" << endl;
-		}
-		else 
-			cout << "   calibration plot directory already exists...skipping to next" << endl;
-
-		//check to see if LY plot directory exists, if not then create
-		if (stat(string(lyPlotDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
-			com = "mkdir "+(string)lyPlotDir; std::system(com.c_str());
-			cout << "   created directory '" << lyPlotDir << "'" << endl;
-		}
-		else
-			cout << "   LY plot directory already exists...skipping to next" << endl;
-
-		//check to see if calibration directory exists, if not then create
-		if (stat(string(calDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
-			com = "mkdir "+(string)calDir; std::system(com.c_str());
-			cout << "   created directory '" << calDir << "'" << endl;
-		}
-		else
-			cout << "   calibration directory already exists...skipping to next" << endl;
-
-		//check to see if analysis data directory exists, if not then create
-		if (stat(string(anaDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
-			com = "mkdir "+(string)anaDir; std::system(com.c_str());
-			cout << "   created directory '" << anaDir << "'" << endl;
-		}
-		else
-			cout << "   analysis data directory already exists...skipping to next" << endl;
-		cout << "directory generation complete" << endl;
+	//check to see if plot directory exists, if not then create
+	if (stat(string(plotDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
+		com = "mkdir "+(string)plotDir; std::system(com.c_str());
+		cout << "   created directory '" << plotDir << "'" << endl;
 	}
 	else
-		cout << "WARNING: missing one or both data files -> "
-			<< "output directories not generated" << endl;
+		cout << "   plot directory already exists...skipping to next" << endl;
+
+	//check to see if cal plot directory exists, if not then create
+	if (stat(string(calPlotDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
+		com = "mkdir "+(string)calPlotDir; std::system(com.c_str());
+		cout << "   created directory '" << calPlotDir << "'" << endl;
+	}
+	else 
+		cout << "   calibration plot directory already exists...skipping to next" << endl;
+
+	//check to see if LY plot directory exists, if not then create
+	if (stat(string(lyPlotDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
+		com = "mkdir "+(string)lyPlotDir; std::system(com.c_str());
+		cout << "   created directory '" << lyPlotDir << "'" << endl;
+	}
+	else
+		cout << "   LY plot directory already exists...skipping to next" << endl;
+
+	//check to see if calibration directory exists, if not then create
+	if (stat(string(calDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
+		com = "mkdir "+(string)calDir; std::system(com.c_str());
+		cout << "   created directory '" << calDir << "'" << endl;
+	}
+	else
+		cout << "   calibration directory already exists...skipping to next" << endl;
+
+	//check to see if analysis data directory exists, if not then create
+	if (stat(string(anaDir).c_str(), &sb) != 0 || !S_ISDIR(sb.st_mode)) {
+		com = "mkdir "+(string)anaDir; std::system(com.c_str());
+		cout << "   created directory '" << anaDir << "'" << endl;
+	}
+	else
+		cout << "   analysis data directory already exists...skipping to next" << endl;
+	cout << "directory generation complete" << endl;
 
 }
 
