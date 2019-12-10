@@ -169,11 +169,11 @@ mppc::mppc(TString file1, TString file2)
 	struct stat sb;
 	string com = "";
 	TString dirName = (TString)finstr+"_AND_"+(TString)foutstr;
-	TString plotDir = PLOTS + dirName;
-	TString calPlotDir = plotDir + "/Cal";
-	TString lyPlotDir = plotDir + "/LY";
-	TString calDir = CAL + dirName;
-	TString anaDir = ANA + dirName;
+	plotDir = PLOTS + dirName;
+	calPlotDir = plotDir + "/Cal";
+	lyPlotDir = plotDir + "/LY";
+	calDir = CAL + dirName;
+	anaDir = ANA + dirName;
 
 	cout << "generating output directories with base " << dirName << "..." << endl;
 
