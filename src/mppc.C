@@ -122,12 +122,12 @@ bool mppc::VerifyMacAddresses(){
 	int nentriesIn = fTreeInner->GetEntriesFast();
 	int nentriesOut = fTreeOuter->GetEntriesFast();
 
-	for(int i=0; i<nentriesIn; i++){
+	for(int i=0; i<0.5e6&&i<nentriesIn; i++){
 		fTreeInner->GetEntry(i);
 		macs.insert(mac5);
 		inmacs.insert(mac5);
 	}
-        for(int i=0; i<nentriesOut; i++){
+        for(int i=0; i<0.5e6&&i<nentriesOut; i++){
                 fTreeOuter->GetEntry(i);
                 macs.insert(mac5);
 		outmacs.insert(mac5);
@@ -1048,15 +1048,14 @@ void mppc::Cal(Int_t mac)
 	fgname+=FormatMacString(mac)+".txt";
 	fpname+=FormatMacString(mac)+".txt";
 
-		//check if files already exist
-		if(!gSystem->AccessPathName(fgname) || !gSystem->AccessPathName(fpname)) {
-			cout << "skipping calibration for mac5 " << FormatMacString(mac) << "! Existing files found." << endl;
-			return;
-		}
-		else
-		{
-			fgout.open(fgname);
-			fpout.open(fpname);
+	//check if files already exist
+	if(!gSystem->AccessPathName(fpname)) {
+		cout << "skipping pedestal calibration for mac5 " << FormatMacString(mac) 
+			<< "! Existing files found." << endl;
+	}
+	else
+	{
+		fpout.open(fpname);
 
 		//loop over FEB channels, perform pedestal and gain fits, save to file
 		for (int i = 0; i < 32; i++)
@@ -1064,10 +1063,18 @@ void mppc::Cal(Int_t mac)
 			//perform pedestal calibration for all channels
 			parr = PlotPedFit(mac,i,1,false);
 			// mean, mean err, sigma, sigma err, const, const err
-			fpout << parr[2] << " " << parr[3] << " " << parr[4] << " " << parr[5] << " " << parr[0] << " " << parr[1] <<'\n';
+			fpout << parr[2] << " " << parr[3] << " " << parr[4] << " " 
+				<< parr[5] << " " << parr[0] << " " << parr[1] <<'\n';
 		}
 		fpout.close();
 		cout << fpname << " written" << endl;
+	}
+
+	if(!gSystem->AccessPathName(fgname))
+		cout << "skipping calibration for mac5 " << FormatMacString(mac) 
+			<< "! Existing files found." << endl;
+	else {
+		fgout.open(fgname);
 
 		for (int i = 0; i < 32; i++)
 		{
@@ -1077,17 +1084,16 @@ void mppc::Cal(Int_t mac)
 			}
 			else {
 				garr = PlotGainFit(mac,i,1,-1);
-				//cout << "gain fit - recursive refit" << endl;
-				//garr = PlotGainFit(mac,i,1,garr[0]);
 				// gain, gain err, ped, ped err, chi-2, ndf
-				fgout << garr[0] << " " << garr[1] << " " << garr[2] << " " << garr[3] << " " << garr[4] << " " << garr[5] << '\n';
+				fgout << garr[0] << " " << garr[1] << " " << garr[2] << " " 
+					<< garr[3] << " " << garr[4] << " " << garr[5] << '\n';
 			}
 		}//loop over FEB channels
 
 		fgout.close();
 		cout << fgname << " written" << endl;
 
-	}//end else cal ped,gain
+	}//end else cal gain
 
 	delete[] garr;
 	delete[] parr;
