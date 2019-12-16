@@ -5,6 +5,7 @@
 #ifndef mppc_h
 #define mppc_h
 
+#include <TSystem.h>
 #include <TSystemDirectory.h>
 #include <TList.h>
 #include <TSystemFile.h>
@@ -51,16 +52,30 @@ public :
 	UShort_t chg[32];
 	UInt_t	 ts0;
 	UInt_t	 ts1;
+	UShort_t   flags;
 	//UInt_t	 ts0_ref;
 	//UInt_t	 ts1_ref;
+	ULong_t  run_start_time;
+	ULong_t  this_poll_start;
+	ULong_t  this_poll_end;
+	ULong_t  last_poll_start;
+	ULong_t  last_poll_end;
+	ULong_t  fragment_timestamp;
 
 	// List of branches
 	TBranch	*b_mac5;
 	TBranch	*b_chg;
 	TBranch	*b_ts0;
 	TBranch	*b_ts1;
+	TBranch *b_flags;
   	//TBranch	*b_ts0_ref;
 	//TBranch	*b_ts1_ref;
+	TBranch *b_run_start_time;
+	TBranch *b_this_poll_start;
+	TBranch *b_this_poll_end;
+	TBranch *b_last_poll_start;
+	TBranch *b_last_poll_end;
+	TBranch *b_fragment_timestamp;
 
 	//private function declarations
 	mppc(TString file1, TString file2); //constructor
@@ -74,7 +89,7 @@ public :
 	bool IsMacConfigured(int mac);
 	bool IsChanConfigured(int mac, int chan);
 	string FormatMacString(int mac);
-	void PlotSpectrum(Int_t mac, Int_t chan, Int_t save_opt);
+	TH1F* PlotSpectrum(Int_t mac, Int_t chan, Int_t save_opt, Bool_t overlay);
 	void PlotSingleChanCutLoop(Int_t mac, Float_t cut);
 	TH1F* PlotSingleChanCut(Int_t mac, Int_t chan, Float_t cut, Int_t save_opt);
 	void ThresholdStats(char runtype, Float_t thresh);
@@ -112,6 +127,9 @@ public :
 	void PlotRawSpectrum(Int_t mac, Int_t chan, Int_t save_opt);
 	void CountOverflows(char runtype );
 	void PlotADCTimeSlice(char runtype, Int_t mac, Int_t adclow, Int_t adchigh);
+	void MacSpectraOverlay(Int_t mac);
+	void PlotTS0(Int_t mac);
+	void EventRate(int mac);
 };
 
 //constuctor
@@ -249,8 +267,16 @@ void mppc::Init(TTree *tree, char type)
 		fTreeInner->SetBranchAddress("adc", &chg, &b_chg);
 		fTreeInner->SetBranchAddress("ts0", &ts0, &b_ts0);
 		fTreeInner->SetBranchAddress("ts1", &ts1, &b_ts1);
+		fTreeInner->SetBranchAddress("flags",&flags,&b_flags);
 		//fTreeInner->SetBranchAddress("ts0_ref", &ts0_ref, &b_ts0_ref);
 		//fTreeInner->SetBranchAddress("ts1_ref", &ts1_ref, &b_ts1_ref);
+		fTreeInner->SetBranchAddress("run_start_time",     &run_start_time,     &b_run_start_time);
+		fTreeInner->SetBranchAddress("this_poll_start",    &this_poll_start,    &b_this_poll_start);
+		fTreeInner->SetBranchAddress("this_poll_end",      &this_poll_end,      &b_this_poll_end);
+		fTreeInner->SetBranchAddress("last_poll_start",    &last_poll_start,    &b_last_poll_start);
+		fTreeInner->SetBranchAddress("last_poll_end",      &last_poll_end,      &b_last_poll_end);
+		fTreeInner->SetBranchAddress("fragment_timestamp", &fragment_timestamp, &b_&fragment_timestamp);
+
 	}
 	if(type=='o') {
 		fTreeOuter = tree;
@@ -259,8 +285,15 @@ void mppc::Init(TTree *tree, char type)
 		fTreeOuter->SetBranchAddress("adc", &chg, &b_chg);
 		fTreeOuter->SetBranchAddress("ts0", &ts0, &b_ts0);
 		fTreeOuter->SetBranchAddress("ts1", &ts1, &b_ts1);
+		fTreeOuter->SetBranchAddress("flags",&flags,&b_flags);
 		//fTreeOuter->SetBranchAddress("ts0_ref", &ts0_ref, &b_ts0_ref);
 		//fTreeOuter->SetBranchAddress("ts1_ref", &ts1_ref, &b_ts1_ref);
+		fTreeOuter->SetBranchAddress("run_start_time",     &run_start_time,     &b_run_start_time);
+		fTreeOuter->SetBranchAddress("this_poll_start",    &this_poll_start,    &b_this_poll_start);
+		fTreeOuter->SetBranchAddress("this_poll_end",      &this_poll_end,      &b_this_poll_end);
+		fTreeOuter->SetBranchAddress("last_poll_start",    &last_poll_start,    &b_last_poll_start);
+		fTreeOuter->SetBranchAddress("last_poll_end",      &last_poll_end,      &b_last_poll_end);
+		fTreeOuter->SetBranchAddress("fragment_timestamp", &fragment_timestamp, &b_&fragment_timestamp);
 	}
    
 	Notify();
