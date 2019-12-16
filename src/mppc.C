@@ -266,11 +266,11 @@ void mppc::PlotRawSpectrum(Int_t mac=0, Int_t chan=1, Int_t save_opt=0)
 
 
 
-void mppc::PlotSpectrum(Int_t mac=0, Int_t chan=1, Int_t save_opt=0)
+TH1F* mppc::PlotSpectrum(Int_t mac=0, Int_t chan=1, Int_t save_opt=0, Bool_t overlay=0)
 {
 	if(!IsChanConfigured(mac,chan)||mactolay.size()==0) {
 		cout << "ERROR in PlotSpectrum: channel passed which is not configured!" << endl;
-		return;
+		return nullptr;
 	}
 
 	TTree* tree;
@@ -278,7 +278,7 @@ void mppc::PlotSpectrum(Int_t mac=0, Int_t chan=1, Int_t save_opt=0)
 	else if(mactolay[mac]=='o') tree = fTreeOuter;
 	else {
 		cout << "ERROR in PlotSpectrum: unknown runtype provided - " << mactolay[mac] << endl;
-		return;
+		return nullptr;
 	}
 
 	Double_t *conv = GetGain(mac);
@@ -286,16 +286,20 @@ void mppc::PlotSpectrum(Int_t mac=0, Int_t chan=1, Int_t save_opt=0)
 
 	Int_t nentries = tree->GetEntriesFast();
 
-	TString htitle = "ch. "; 
+	TString htitle = "ch. ";
+	TString hobj = "hspectrum_"+FormatMacString(mac)+"_"; 
 	htitle+=chan;
+	if(chan<10) hobj+="0";
+	hobj+=chan;
 
 	Float_t low = -1.5;	
-	Float_t high = 60.5;
-	Float_t binning = 0.1; //3/conv[1];
+	Float_t high = 75.5;
+	Float_t binning = 0.1; 
 	Int_t nbins = (high-low)/binning;
-	TString binstr="counts / "; binstr+=binning; binstr+=" PE";
+	TString binningstr = binning; binningstr.Resize(4);
+	TString binstr="counts / "+binningstr+" PE";
 
-	TH1F *h = new TH1F("h",htitle,nbins,low,high);
+	TH1F *h = new TH1F(hobj,htitle,nbins,low,high);
 	h->GetXaxis()->SetTitle("signal amplitude (PE)");
 	h->GetYaxis()->SetTitle(binstr);
 	//h->GetYaxis()->SetTitle("Hz / PE");
@@ -314,10 +318,38 @@ void mppc::PlotSpectrum(Int_t mac=0, Int_t chan=1, Int_t save_opt=0)
 	//h->Sumw2();
 	//h->Scale(1.0/(180-h->Integral()*2.2e-6));
 
-	TCanvas *c = new TCanvas();
-	c->SetGrid();
-	c->SetLogy();
-	h->Draw("hist");
+	if(!overlay) {
+		TCanvas *c = new TCanvas();
+		c->SetGrid();
+		c->SetLogy();
+		h->Draw("hist");
+	}
+	return h;
+}
+
+void mppc::MacSpectraOverlay(Int_t mac=1) {
+
+	Int_t colors[32];
+	for(int i=0; i<32; i++) {
+		if(i<23) colors[i] = 49-i;
+		else colors[i] = i-22;
+	}
+
+	TCanvas* call = new TCanvas();
+	bool first = true;
+	for(int ch=0; ch<32; ch++) {
+		if(!IsChanConfigured(mac,ch)) continue;
+		TH1F* h = mppc::PlotSpectrum(mac,ch,0,1);
+		call->cd();
+		h->SetLineColor(colors[ch]);
+		if(first) {
+			h->Draw();
+			first=false;
+		}
+		else
+			h->Draw("same");
+		//delete h;
+	}
 }
 
 //******************************************************************************
@@ -1083,7 +1115,7 @@ void mppc::Cal(Int_t mac)
 				fgout << 0 << '\n';
 			}
 			else {
-				garr = PlotGainFit(mac,i,1,-1);
+				garr = PlotGainFit(mac,i,1,55.5);
 				// gain, gain err, ped, ped err, chi-2, ndf
 				fgout << garr[0] << " " << garr[1] << " " << garr[2] << " " 
 					<< garr[3] << " " << garr[4] << " " << garr[5] << '\n';
@@ -1122,10 +1154,22 @@ Double_t* mppc::PlotGainFit(Int_t mac=80, Int_t chan=30, Int_t save_opt = 1, Dou
         else if(mactolay[mac]=='o') tree = fTreeOuter;
 	const int nentries = tree->GetEntriesFast();
 
+        Double_t *peds =GetPed(mac);
+
+	Int_t lowbin, highbin;
+	if (gain_seed==-1.0) {
+		lowbin=400;
+		highbin=700;
+	}
+	else{
+		lowbin=peds[chan]+4.0*gain_seed;
+		highbin=peds[chan]+8.0*gain_seed;
+	}
+
 	//histogram setup
-	const Int_t binning = 5;
-	const Int_t low = 500;
-	const Int_t high = 1000;	
+	const Int_t binning = 7;
+	const Int_t low = lowbin;//400;
+	const Int_t high = highbin;//700;	
 	const Int_t bins = (high-low)/binning;
 
 	TString htitle = "mac5 "+FormatMacString(mac)+", ch. "+to_string(chan);
@@ -1172,7 +1216,9 @@ Double_t* mppc::PlotGainFit(Int_t mac=80, Int_t chan=30, Int_t save_opt = 1, Dou
 		int ctr=1;
 		TString suff = ".png";
 		TString fname = calPlotDir+"/";
-		fname+=FormatMacString(mac)+"_ch"+to_string(chan)+"_fit-spec";
+		fname+=FormatMacString(mac)+"_ch";
+		if(chan<10) fname+="0";
+		fname+=to_string(chan)+"_fit-spec";
 		if(gain_seed>0) fname+="_gain-seeded";
 		fname+="_1"+suff;
 
@@ -1209,7 +1255,7 @@ Double_t* mppc::PlotGainFit(Int_t mac=80, Int_t chan=30, Int_t save_opt = 1, Dou
 Double_t* mppc::FitGain(Int_t mac, TH1F *hs, Int_t chan = 24, Int_t save_opt = 0, Double_t gain_seed=-2.0)
 {
 	TSpectrum *s = new TSpectrum();
-	Int_t npeaks = s->Search(hs,2,"",0.18);//args=source histo, sigma of searched peaks, options, threshold
+	Int_t npeaks = s->Search(hs,1.75,"",0.18);//args=source histo, sigma of searched peaks, options, threshold
 	//cout << "TSpectrum found " << npeaks << " peaks" << endl;
 	Int_t ctr = 2;
 
@@ -1223,8 +1269,11 @@ Double_t* mppc::FitGain(Int_t mac, TH1F *hs, Int_t chan = 24, Int_t save_opt = 0
 	Double_t gain = gain_seed;
 	Double_t *peds =GetPed(mac);
 	Double_t *pwidths=GetPedWidth(mac);
-	Double_t *gains=InitGain(mac);
-	if(gain_seed<0) gain=gains[chan];
+	Double_t *gains;//=InitGain(mac);
+	if(gain_seed<0){
+		gain=gains[chan];
+		gains=InitGain(mac);
+	}
 	Double_t *peaks = s->GetPositionX(); //candidate photopeaks ADC position
 
 	//cout << "using ped mean(from fit): " << peds[chan] << " ADC" << endl;
@@ -1280,19 +1329,19 @@ Double_t* mppc::FitGain(Int_t mac, TH1F *hs, Int_t chan = 24, Int_t save_opt = 0
 	{
 		//initial gaus fit to peak from TSpectrum
 		TF1 *gfit = new TF1("gfit","gaus",y[g]-20,y[g]+20);
-		gfit->SetParameter(0,200);
+		gfit->SetParameter(0,hs->GetBinContent(hs->FindBin(y[g])));//200);
 		gfit->SetParameter(1,y[g]);
 		gfit->SetParameter(2,12);
-		gfit->SetParLimits(0,0,2000);
+		gfit->SetParLimits(0,0,20000);
 		gfit->SetParLimits(1,y[g]-15,y[g]+15);
-		gfit->SetParLimits(2,1,40);
+		gfit->SetParLimits(2,8,40);
 		//cout << "fitting gaussian to peak detected at " << y[g] << " ADC..." << endl;
 
 		hs->Fit(gfit,"MQLR"); //fit peak
 		chisqr0 = gfit->GetChisquare()/gfit->GetNDF(); //get reduced chi-square from fit
 
 		//if chisqr is "large", try with smaller range
-		if (chisqr0>1.9) 		
+		/*if (chisqr0>1.9) 		
 		{
 			//cout << "X^2 too large (" << chisqr0 << "). refitting..." << endl;
 			gfit->SetParameter(1,y[g]);            //reinitialize mean to TSpectrum peak
@@ -1342,10 +1391,10 @@ Double_t* mppc::FitGain(Int_t mac, TH1F *hs, Int_t chan = 24, Int_t save_opt = 0
 		}//end if initial chi-square good
 
 		//we are happy with this fit, add to fit list
-		else {
+		else {*/
 			hs->Fit(gfit,"MQLR+");
 			gfit->Draw("same");
-		}
+		//}
 		//check for peaks near the edges of the histogam
 		if( y[g]<hs->GetBinLowEdge(1)+15) nplow++;
 		if( y[g]>hs->GetBinLowEdge(hs->GetNbinsX())-15) nphigh++;
@@ -1482,7 +1531,9 @@ Double_t* mppc::FitGain(Int_t mac, TH1F *hs, Int_t chan = 24, Int_t save_opt = 0
 		int ctr=1;
 		TString suff = ".png";
 		TString fname=calPlotDir+"/"; 
-		fname+=FormatMacString(mac)+"_ch"+to_string(chan)+"_fit-gain";
+		fname+=FormatMacString(mac)+"_ch";
+		if(chan<10) fname+="0";
+		fname+=to_string(chan)+"_fit-gain";
 		if(gain_seed>0) fname+="_gain-seeded";
 		fname+="_1"+suff;
 		while (!gSystem->AccessPathName(fname))
@@ -1522,7 +1573,7 @@ Double_t* mppc::PlotPedFit(Int_t mac=80, Int_t chan=30, Int_t save_opt=0, bool u
 	Double_t* peds = new Double_t[32];
 	Double_t* statarr = new Double_t[6];
 
-	Int_t low=1, high=250, binning=2;
+	Int_t low=1, high=300, binning=2;
 	if(useInit){ 
 		peds = InitPed(mac);
 		low = (Int_t)peds[chan]-20;
@@ -1616,7 +1667,7 @@ Double_t* mppc::PlotPedFit(Int_t mac=80, Int_t chan=30, Int_t save_opt=0, bool u
 	csq = gausfit->GetChisquare();
 	ndf = gausfit->GetNDF();
 	rcsq = csq/ndf;
-	if (rcsq>100.0) cout << "warning: possibly bad ped fit mac5 " << mac << ", ch. " 
+	if (rcsq>200.0) cout << "warning: possibly bad ped fit mac5 " << mac << ", ch. " 
 			<< chan << " X^2/NDF=" << rcsq << " ADC" << endl;
 
 	//save plot to file if desired
@@ -1625,7 +1676,9 @@ Double_t* mppc::PlotPedFit(Int_t mac=80, Int_t chan=30, Int_t save_opt=0, bool u
 		int ctr = 1;
 		TString suff=".png";
 		TString fname = calPlotDir+"/";		 
-		fname+=FormatMacString(mac)+ "_ch"+to_string(chan)+"_pedfit_"+to_string(ctr)+suff;
+		fname+=FormatMacString(mac)+ "_ch";
+		if(chan<10) fname+="0";
+		fname+=to_string(chan)+"_pedfit_"+to_string(ctr)+suff;
 
 		while (!gSystem->AccessPathName(fname))
 		{
@@ -2736,4 +2789,134 @@ void mppc::CountOverflows(char runtype='h')
 	 << "  mac85:  ts0-> " << neve85_over_0 << " , ts1-> " << neve85_over_1 << '\n'
 	 << "  mac213: ts0-> " << neve213_over_0 << " , ts1-> " << neve213_over_1 << endl;
 */
+}
+
+void mppc::PlotTS0(Int_t mac) {
+        TTree* tree=0;
+        if(mactolay[mac]=='i') tree = fTreeInner;
+        else if(mactolay[mac]=='o') tree=fTreeOuter;
+        const int nentries = tree->GetEntriesFast();
+	int n=0, nflag=0, nmiss=0;
+
+	for(int ientry=0; ientry<nentries; ientry++) {
+		tree->GetEntry(ientry);
+		if(mac5==mac) {
+			n++; 
+			if(flags==7) nflag++;
+		}
+	}
+
+	const int size=n;
+	const int sizeflag=nflag; 
+	int* t = new int[size];
+	int* ent = new int[size]; 
+	int tflag[sizeflag], entflag[sizeflag]; 
+	n=0, nflag=0;
+
+        for(int ientry=0; ientry<nentries; ientry++) {
+                tree->GetEntry(ientry);
+                if(mac5==mac) {
+			t[n] = ts0;
+			ent[n] = n;
+			n++;
+			if(flags==7) {
+				tflag[nflag]=ts0;
+				entflag[nflag]=ent[n-1];
+				nflag++;
+			}
+		}
+        }
+
+	vector<int> vtmiss, ventmiss;
+	for(int i=0; i<size-1; i++) {
+		bool isflag=false;
+		if(1e9-t[i]<1e7&&t[i+1]<1e7) {
+			for(int j=0; j<sizeflag; j++) {
+				if(entflag[j]==ent[i]) {
+					isflag=true;
+					break;
+				}
+			}
+			if(!isflag){
+				nmiss++;
+				vtmiss.push_back(t[i]);
+				ventmiss.push_back(ent[i]);
+			}
+			else isflag=false;
+		}
+	}
+
+	const int sizemiss=nmiss;
+	int tmiss[sizemiss], entmiss[sizemiss];
+	for(int i=0; i<nmiss; i++){
+		tmiss[i]=vtmiss[i];
+		entmiss[i]=ventmiss[i];
+	}
+
+	cout << "found " << nflag << " flags and " << nmiss << " missed flags" << endl;
+	cout << " from this, estimated run time = " << 1.0*(nflag+nmiss)/60 << " min" << endl;
+
+	TGraph *g = new TGraph(size,ent,t);
+	TGraph* gflag = new TGraph(sizeflag,entflag,tflag);
+	//TGraph* gmiss = new TGraph(sizemiss,entmiss,tmiss);
+	gflag->SetMarkerStyle(8);
+	gflag->SetMarkerColor(kBlue);
+	//gmiss->SetMarkerStyle(8);
+	//gmiss->SetMarkerColor(kRed);
+	new TCanvas();
+	g->Draw("ap");
+	gflag->Draw("samep");
+	for(int i=0; i<nmiss; i++){
+		TLine* l = new TLine(entmiss[i],0,entmiss[i],999e6);
+		l->SetLineColor(kRed);
+		l->SetLineWidth(3);
+		l->Draw("same");
+	}
+	
+}
+
+void mppc::EventRate(int mac){
+        TTree* tree=0;
+        if(mactolay[mac]=='i') tree = fTreeInner;
+        else if(mactolay[mac]=='o') tree=fTreeOuter;
+        const int nentries = tree->GetEntriesFast();
+
+	const float tpoll=300e-3;
+	int neve=0;
+	bool ismac=false;
+	std::vector<int> n;
+	
+	for(int ientry=0; ientry<nentries; ientry++) {
+		tree->GetEntry(ientry);
+
+		if(mac5==mac) {
+			ismac=true;
+			neve++;
+		}
+		else {
+			if(ismac){
+				n.push_back(neve);
+				neve=0;
+			}
+			ismac=false;
+		}
+
+	}
+
+	const size_t npoll = n.size();
+	float rate[npoll/4], pollno[npoll/4];
+	for(int i=0; i<npoll-4; i+=4){
+		pollno[i/4] = i/4;
+		rate[i/4] = (n[i]+n[i+1]+n[i+2]+n[i+3])/(4*tpoll);
+	}
+
+	TGraph* g = new TGraph(npoll/4,pollno,rate);
+	string title = "Trigger Rate: FEB "+to_string(mac);
+	g->SetTitle(title.c_str());
+	g->GetXaxis()->SetTitle("poll number");
+	g->GetYaxis()->SetTitle("TriggerRate [Hz]");
+
+
+	new TCanvas();
+	g->Draw("APL");
 }
